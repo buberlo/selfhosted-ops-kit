@@ -1,0 +1,15 @@
+{{- if .Values.postgres.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "notes.fullname" . }}-postgres
+  labels:
+    {{- include "notes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "notes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+{{- end }}

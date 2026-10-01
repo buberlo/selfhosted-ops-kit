@@ -1,0 +1,28 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "notes.fullname" . }}-backup-scripts
+  labels:
+    {{- include "notes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+data:
+  backup.sh: |
+    #!/bin/sh
+    # Logical backup with pg_dump (custom format), verified and rotated.
+    set -eu
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    file="/backups/${PGDATABASE}-${ts}.dump"
+    echo "starting backup of ${PGDATABASE}@${PGHOST} -> ${file}"
+    pg_dump --format=custom --no-owner --file="${file}.partial"
+    # Only a dump that pg_restore can read counts as a backup.
+    pg_restore --list "${file}.partial" > /dev/null
+    mv "${file}.partial" "${file}"
+    echo "backup ok: ${file} ($(du -h "${file}" | cut -f1))"
+    # Retention: keep the newest ${RETENTION} dumps.
+    ls -1t /backups/*.dump | tail -n +"$((RETENTION + 1))" | while read -r old; do
+      echo "retention: removing ${old}"
+      rm -f "${old}"
+    done
+    rm -f /backups/*.partial
+{{- end }}

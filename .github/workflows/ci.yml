@@ -1,0 +1,172 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HELM_VERSION: v4.3.0
+  KIND_VERSION: v0.33.0
+  KUBECONFORM_VERSION: v0.8.0
+  TF_VERSION: 1.16.4
+  TFLINT_VERSION: v0.64.0
+  SHELLCHECK_VERSION: v0.11.0
+  ACTIONLINT_VERSION: 1.7.12
+  ASCIINEMA_VERSION: v3.2.1
+  AGG_VERSION: v1.9.0
+  K8S_SCHEMA_VERSION: 1.34.0
+
+jobs:
+  lint:
+    name: lint (helm, kubeconform, terraform, tflint, shellcheck, hadolint, actionlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubeconform, shellcheck, actionlint
+        run: |
+          mkdir -p "$HOME/bin" && echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$HOME/bin" kubeconform
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" | tar xJ --strip-components=1 -C "$HOME/bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" | tar xz -C "$HOME/bin" actionlint
+
+      - name: helm lint
+        run: |
+          helm lint charts/notes --strict
+          helm lint charts/notes --strict -f charts/notes/values-ha.yaml
+
+      - name: kubeconform (default, HA, air-gapped registry override)
+        run: |
+          for args in "" "-f charts/notes/values-ha.yaml" "--set global.imageRegistry=registry.internal:5000 --set global.imagePullSecrets={regcred}"; do
+            echo "::group::helm template ${args:-<defaults>}"
+            # shellcheck disable=SC2086
+            helm template notes charts/notes -n ops-demo ${args} \
+              | kubeconform -strict -summary -kubernetes-version "${K8S_SCHEMA_VERSION}"
+            echo "::endgroup::"
+          done
+
+      - name: Offline image list
+        run: ./scripts/mirror-images.sh list
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt / validate
+        working-directory: terraform/kind
+        run: |
+          terraform fmt -check -recursive -diff
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint
+        working-directory: terraform/kind
+        run: |
+          tflint --init
+          tflint --format compact
+
+      - name: shellcheck
+        run: shellcheck -x -P SCRIPTDIR scripts/*.sh
+
+      - name: actionlint
+        run: actionlint
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: app/Dockerfile
+
+      - name: python syntax
+        run: python3 -m py_compile app/app.py
+
+  e2e:
+    name: e2e on kind (install, upgrade, auto-rollback, rollback, backup/restore, netpol)
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      FORCE_COLOR: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Install kind, asciinema, agg
+        run: |
+          mkdir -p "$HOME/bin" && echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSLo "$HOME/bin/kind" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl -fsSLo "$HOME/bin/asciinema" "https://github.com/asciinema/asciinema/releases/download/${ASCIINEMA_VERSION}/asciinema-x86_64-unknown-linux-musl"
+          curl -fsSLo "$HOME/bin/agg" "https://github.com/asciinema/agg/releases/download/${AGG_VERSION}/agg-x86_64-unknown-linux-musl"
+          chmod +x "$HOME/bin/"*
+
+      - name: make up (build images, Terraform kind cluster, Helm install, smoke test)
+        run: make up
+
+      - name: make test (end-to-end day-2 scenarios)
+        run: make test 2>&1 | tee e2e.log
+
+      - name: Record demo (terminal recording of upgrade / auto-rollback / rollback / restore)
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p demo
+          asciinema rec --headless --overwrite --return -q --window-size 120x34 -i 1 \
+            --title "selfhosted-ops-kit day-2 demo" \
+            -c "bash -c 'scripts/demo.sh 2>&1 | tee demo/demo.log; exit \${PIPESTATUS[0]}'" demo/demo.cast < /dev/null
+          agg --idle-time-limit 1 --speed 1.5 --font-size 14 demo/demo.cast demo/demo.gif
+          cat demo/demo.log
+          ls -la demo
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## selfhosted-ops-kit e2e"
+            echo '```'
+            grep -E ' OK | FAIL ' e2e.log 2>/dev/null | sed -e 's/\x1b\[[0-9;]*m//g' || echo "no e2e log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect diagnostics (support bundle)
+        if: failure()
+        run: ./scripts/collect-diagnostics.sh diagnostics || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-evidence
+          path: |
+            e2e.log
+            demo/
+            diagnostics.tar.gz
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Tear down
+        if: always()
+        run: make down || true

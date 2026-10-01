@@ -1,0 +1,14 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# Local artifacts
+/e2e.log
+/demo/
+diagnostics*/
+diagnostics*.tar.gz
+*.tar
+*.tar.sha256
+__pycache__/

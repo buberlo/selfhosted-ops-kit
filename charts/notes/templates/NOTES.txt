@@ -1,0 +1,22 @@
+{{ include "notes.fullname" . }} {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}.
+
+This is a portfolio/demo chart, not a production product.
+
+Check status:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  helm -n {{ .Release.Namespace }} test {{ .Release.Name }}
+
+Talk to the API:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "notes.fullname" . }}-api 8080:{{ .Values.api.service.port }}
+  curl -s localhost:8080/version
+  curl -s -XPOST --data 'hello' localhost:8080/notes
+
+{{- if .Values.backup.enabled }}
+
+Backups: CronJob {{ include "notes.fullname" . }}-backup ("{{ .Values.backup.schedule }}"), keeping {{ .Values.backup.retention }} dumps
+{{- if .Values.backup.preUpgradeHook }}, plus a pre-upgrade/pre-rollback hook backup{{ end }}.
+Run one now:
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "notes.fullname" . }}-backup manual-backup-$(date +%s)
+{{- end }}
+
+Runbooks: https://github.com/buberlo/selfhosted-ops-kit/tree/main/docs/runbooks

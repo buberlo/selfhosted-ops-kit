@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notes.fullname" . }}-api
+  labels:
+    {{- include "notes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  revisionHistoryLimit: 5
+  strategy:
+    {{- toYaml .Values.api.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "notes.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "notes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+        {{- include "notes.dbClientLabel" . | nindent 8 }}
+      {{- with .Values.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with (include "notes.imagePullSecrets" .) }}{{ . | nindent 6 }}{{- end }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        # Schema migrations run before the new version takes traffic. Concurrent
+        # pods serialise on a PostgreSQL advisory lock inside `app.py migrate`.
+        - name: migrate
+          image: {{ include "notes.apiImage" . }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            {{- include "notes.apiEnv" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      containers:
+        - name: api
+          image: {{ include "notes.apiImage" . }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "notes.apiEnv" . | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.api.probes.startup | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.api.probes.liveness | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.api.probes.readiness | nindent 12 }}
+          {{- if .Values.api.preStopSleepSeconds }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.api.preStopSleepSeconds }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- if .Values.api.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.api.topologySpread.maxSkew }}
+          topologyKey: {{ .Values.api.topologySpread.topologyKey }}
+          whenUnsatisfiable: {{ .Values.api.topologySpread.whenUnsatisfiable }}
+          # Do not count tainted nodes (e.g. control planes) as empty domains.
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              {{- include "notes.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+          matchLabelKeys:
+            - pod-template-hash
+      {{- end }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

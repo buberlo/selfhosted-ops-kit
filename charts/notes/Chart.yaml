@@ -1,0 +1,20 @@
+apiVersion: v2
+name: notes
+description: >-
+  Demo chart for a small stateful service (notes-api + PostgreSQL) with
+  day-2 operations built in: probes, PDB, NetworkPolicies, resource limits,
+  scheduled and pre-upgrade backups. Portfolio/demo project, not production.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/buberlo/selfhosted-ops-kit
+sources:
+  - https://github.com/buberlo/selfhosted-ops-kit
+maintainers:
+  - name: Konrad Kern
+    email: kern.konrad@gmail.com
+keywords:
+  - day-2-operations
+  - postgresql
+  - backup
+  - demo

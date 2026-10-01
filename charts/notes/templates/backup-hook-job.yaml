@@ -1,0 +1,28 @@
+{{- if and .Values.backup.enabled .Values.backup.preUpgradeHook }}
+# Restore point before every upgrade and rollback. If this Job fails, Helm
+# aborts the upgrade before any workload is touched (abort criterion #1 in
+# docs/runbooks/upgrade.md).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "notes.fullname" . }}-pre-upgrade-backup
+  labels:
+    {{- include "notes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    helm.sh/hook: pre-upgrade,pre-rollback
+    helm.sh/hook-weight: "-5"
+    # Keep the last hook Job (and its logs) until the next upgrade.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "notes.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backup
+        {{- include "notes.dbClientLabel" . | nindent 8 }}
+    spec:
+      {{- include "notes.backupPodSpec" . | nindent 6 }}
+{{- end }}
