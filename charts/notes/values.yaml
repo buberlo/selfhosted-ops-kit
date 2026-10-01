@@ -1,0 +1,142 @@
+# Default values: a single-node, laptop/CI friendly install.
+# For the HA-shaped profile see values-ha.yaml.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Prefix every image with a private registry (offline / air-gapped installs).
+# Example: "registry.internal.example:5000". See docs/runbooks/offline-install.md.
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+api:
+  image:
+    repository: selfhosted-ops-kit/notes-api
+    # Defaults to .Chart.AppVersion when empty.
+    tag: ""
+    # Pin by digest for reproducible installs; takes precedence over tag.
+    digest: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  # Zero-surge-loss rollout: never remove a ready pod before its replacement is ready.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  service:
+    type: ClusterIP
+    port: 8080
+  logLevel: INFO
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+  probes:
+    startup:
+      httpGet: { path: /healthz, port: http }
+      periodSeconds: 2
+      failureThreshold: 30
+    liveness:
+      httpGet: { path: /healthz, port: http }
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+    readiness:
+      httpGet: { path: /readyz, port: http }
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+  # Gives the endpoint controller time to remove the pod before SIGTERM.
+  preStopSleepSeconds: 5
+  terminationGracePeriodSeconds: 30
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  topologySpread:
+    enabled: false
+    maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+postgres:
+  image:
+    repository: library/postgres
+    tag: "17.11-alpine"
+    digest: ""
+    pullPolicy: IfNotPresent
+  # Single instance on purpose. HA PostgreSQL belongs to an operator
+  # (e.g. CloudNativePG); see README "Scope".
+  database: notes
+  username: notes
+  # Use an existing Secret with key "password" instead of a generated one.
+  existingSecret: ""
+  persistence:
+    size: 1Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  pdb:
+    # A single-replica PDB with maxUnavailable 0 blocks node drains forever.
+    # Enable only if your drain procedure accounts for it.
+    enabled: false
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+backup:
+  enabled: true
+  # Cron schedule in the cluster's timezone (usually UTC).
+  schedule: "17 2 * * *"
+  # Number of dump files to keep on the backup volume.
+  retention: 7
+  # Take a backup as a Helm pre-upgrade hook, so every upgrade has a restore point.
+  preUpgradeHook: true
+  persistence:
+    size: 2Gi
+    storageClass: ""
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+networkPolicy:
+  enabled: true
+  # Who may reach the API. Empty = any pod in any namespace (still subject to
+  # the cluster's ingress path). Restrict to your ingress controller in real use.
+  apiIngressFrom: []
+  #  - namespaceSelector:
+  #      matchLabels:
+  #        kubernetes.io/metadata.name: ingress-nginx
+  # Restrict API/backup egress to PostgreSQL + cluster DNS.
+  restrictEgress: true
+  dnsNamespace: kube-system
+  dnsPodLabels:
+    k8s-app: kube-dns
+
+# Restricted Pod Security Standard compatible defaults.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

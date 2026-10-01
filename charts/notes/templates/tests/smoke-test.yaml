@@ -1,0 +1,47 @@
+# `helm test` smoke test: readiness, write path and read-back through the Service.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "notes.fullname" . }}-smoke-test
+  labels:
+    {{- include "notes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  {{- with (include "notes.imagePullSecrets" .) }}{{ . | nindent 2 }}{{- end }}
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: smoke
+      image: {{ include "notes.apiImage" . }}
+      imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+      command:
+        - python
+        - -c
+        - |
+          import json, sys, time, urllib.request
+          base = "http://{{ include "notes.fullname" . }}-api:{{ .Values.api.service.port }}"
+          def call(path, data=None):
+              req = urllib.request.Request(base + path, data=data, method="POST" if data else "GET")
+              with urllib.request.urlopen(req, timeout=5) as r:
+                  return r.status, json.loads(r.read())
+          print("readyz:", call("/readyz"))
+          print("version:", call("/version"))
+          marker = "helm-test-%d" % time.time()
+          status, body = call("/notes", marker.encode())
+          assert status == 201, (status, body)
+          _, notes = call("/notes")
+          assert any(n["body"] == marker for n in notes), "written note not found"
+          print("write/read-back ok:", marker)
+      securityContext:
+        {{- toYaml .Values.containerSecurityContext | nindent 8 }}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
