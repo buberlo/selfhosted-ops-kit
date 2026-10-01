@@ -74,7 +74,7 @@ make down    # terraform destroy
 ## Repository layout
 
 ```
-app/                 notes-api (Python, ~150 lines) + Dockerfile (non-root)
+app/                 notes-api (Python, ~180 lines) + Dockerfile (non-root)
 charts/notes/        Helm chart; values.yaml (laptop) and values-ha.yaml (HA-shaped)
 terraform/kind/      kind cluster + namespace baseline (PSS, quota, limits)
 scripts/             executable runbooks: up, install, upgrade, rollback, backup-now,
