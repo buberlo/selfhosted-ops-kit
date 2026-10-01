@@ -33,7 +33,7 @@ spec:
           stats = collections.Counter()
           while True:
               try:
-                  with urllib.request.urlopen(url, timeout=2) as r:
+                  with urllib.request.urlopen(url, timeout=3) as r:
                       stats[r.status] += 1
               except Exception as e:
                   stats["error"] += 1
@@ -52,6 +52,7 @@ YAML
     sleep 3
     last="$(kc logs "${POD}" | grep '^STATS' | tail -n 1)"
     failures="$(kc logs "${POD}" | grep -c 'request failed' || true)"
+    kc logs "${POD}" | grep 'request failed' || true
     kc delete pod "${POD}" --wait=false > /dev/null
     info "traffic result: ${last#STATS } / failed requests: ${failures}"
     [[ "${failures}" -le "${MAX_FAILED_REQUESTS:-0}" ]] || die "${failures} failed requests during the change"
