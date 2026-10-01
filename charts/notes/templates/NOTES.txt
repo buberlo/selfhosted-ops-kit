@@ -1,4 +1,4 @@
-{{ include "notes.fullname" . }} {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}.
+Release {{ .Release.Name }} (api {{ default .Chart.AppVersion .Values.api.image.tag }}, chart {{ .Chart.Version }}) is installed in namespace {{ .Release.Namespace }}.
 
 This is a portfolio/demo chart, not a production product.
 
