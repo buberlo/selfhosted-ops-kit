@@ -11,7 +11,11 @@ Tools: **Helm 4** · **Terraform** (kind + kubernetes providers) · **GitHub Act
 
 ![demo: upgrade, automatic rollback of a broken release, manual rollback, backup/restore](docs/demo/demo.gif)
 
-<sub>Recorded by CI on a GitHub runner (`scripts/demo.sh` under asciinema, idle time capped, sped up 1.5×). Full-resolution cast and logs: [docs/demo/](docs/demo/).</sub>
+<sub>Recorded by CI on a GitHub runner ([run 36812524936](https://github.com/buberlo/selfhosted-ops-kit/actions/runs/36812524936)): `scripts/demo.sh` under asciinema, idle time capped at 2.5 s. Stills, the asciinema cast and the plain-text log are in [docs/demo/](docs/demo/).</sub>
+
+| Upgrade under traffic | Broken release → automatic rollback | Manual rollback |
+|---|---|---|
+| [![upgrade](docs/demo/1-upgrade.png)](docs/demo/1-upgrade.png) | [![auto-rollback](docs/demo/2-auto-rollback.png)](docs/demo/2-auto-rollback.png) | [![rollback](docs/demo/3-rollback.png)](docs/demo/3-rollback.png) |
 
 ## What it demonstrates
 
@@ -70,7 +74,7 @@ make down    # terraform destroy
 ## Repository layout
 
 ```
-app/                 notes-api (Python, ~150 lines) + Dockerfile (non-root)
+app/                 notes-api (Python, ~180 lines) + Dockerfile (non-root)
 charts/notes/        Helm chart; values.yaml (laptop) and values-ha.yaml (HA-shaped)
 terraform/kind/      kind cluster + namespace baseline (PSS, quota, limits)
 scripts/             executable runbooks: up, install, upgrade, rollback, backup-now,

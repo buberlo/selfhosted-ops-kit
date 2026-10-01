@@ -25,7 +25,7 @@ flowchart LR
 
 | Piece | What it is | Why it is built this way |
 |---|---|---|
-| `app/` | ~150-line Python service (`notes-api`) | Something stateful to operate. Separate liveness (`/healthz`, process only) and readiness (`/readyz`, DB + schema) so a database outage removes pods from the Service instead of restart-looping them. |
+| `app/` | ~180-line Python service (`notes-api`) | Something stateful to operate. Separate liveness (`/healthz`, process only) and readiness (`/readyz`, DB + schema) so a database outage removes pods from the Service instead of restart-looping them. |
 | `charts/notes` | Helm chart | The unit a customer installs. All day-2 behaviour (probes, PDB, NetworkPolicies, backups, hooks) is in the chart, not in tribal knowledge. |
 | `terraform/kind` | kind cluster + namespace baseline | Free, disposable stand-in for "the customer's cluster" and the guardrails a platform team usually sets (Pod Security `restricted`, quota, default limits). |
 | `scripts/` | Bash procedures | The runbooks, executable. CI runs exactly these, so the docs cannot silently drift from what works. |
