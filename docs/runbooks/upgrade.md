@@ -50,6 +50,8 @@ Do **not** start the upgrade, or abort it, if any of these is true. `scripts/upg
    kubectl -n ops-demo logs job/notes-pre-upgrade-backup | tail -2
    ```
 
+> **Note on `helm history`:** the `APP VERSION` column shows the chart's `appVersion` (1.0.0), not the `api.image.tag` override, so in this demo every revision reads 1.0.0. Use `/version` or `helm get values notes --revision N` to see what actually ran. In a real release process, the chart's `appVersion` is bumped together with the image so the history explains itself.
+
 ## Evidence from CI
 
 CI runs this procedure under synthetic traffic (4 req/s against the Service, `scripts/traffic.sh`) and fails if even one request fails. It also runs a deliberately broken upgrade (unpullable image) and asserts that Helm rolled back automatically, the old version kept serving, and no request failed.

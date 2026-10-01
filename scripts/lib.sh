@@ -6,11 +6,13 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export REPO_ROOT
+# Work from the repo root so printed commands use short, copy-pasteable paths.
+cd "${REPO_ROOT}"
 
 CLUSTER_NAME="${CLUSTER_NAME:-ops-kit}"
 NAMESPACE="${NAMESPACE:-ops-demo}"
 RELEASE="${RELEASE:-notes}"
-CHART_DIR="${CHART_DIR:-${REPO_ROOT}/charts/notes}"
+CHART_DIR="${CHART_DIR:-charts/notes}"
 # Values profile used for install and every upgrade (keep them identical).
 VALUES_FILE="${VALUES_FILE:-${CHART_DIR}/values-ha.yaml}"
 IMAGE_REPO="${IMAGE_REPO:-selfhosted-ops-kit/notes-api}"
