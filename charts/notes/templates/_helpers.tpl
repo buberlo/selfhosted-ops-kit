@@ -96,6 +96,17 @@ imagePullSecrets:
 {{/* Pod template used by the scheduled backup and the pre-upgrade backup hook. */}}
 {{- define "notes.backupPodSpec" -}}
 restartPolicy: Never
+automountServiceAccountToken: false
+# The backup PVC is ReadWriteOnce and also mounted by the PostgreSQL pod:
+# backup pods must run on the same node.
+affinity:
+  podAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - topologyKey: kubernetes.io/hostname
+        labelSelector:
+          matchLabels:
+            {{- include "notes.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: postgres
 {{- with (include "notes.imagePullSecrets" .) }}{{ . | nindent 0 }}{{- end }}
 securityContext:
   {{- toYaml .Values.podSecurityContext | nindent 2 }}

@@ -72,11 +72,24 @@ spec:
               mountPath: /var/run/postgresql
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.backup.enabled }}
+            # Read-only view of the dumps (list them with `kubectl exec ... ls /backups`).
+            # Also makes this pod the first consumer of the backup PVC, so it binds at
+            # install time on WaitForFirstConsumer storage classes and lands next to the DB.
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+            {{- end }}
       volumes:
         - name: run
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.backup.enabled }}
+        - name: backups
+          persistentVolumeClaim:
+            claimName: {{ include "notes.fullname" . }}-backups
+        {{- end }}
       {{- with .Values.postgres.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

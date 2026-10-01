@@ -22,6 +22,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psycopg
@@ -64,8 +65,21 @@ def connect():
     return psycopg.connect(dsn(), autocommit=True)
 
 
+def connect_with_retry(wait_seconds: int):
+    """Wait for the database during startup instead of crash-looping the init container."""
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        try:
+            return connect()
+        except psycopg.OperationalError as exc:
+            if time.monotonic() >= deadline:
+                raise
+            log.info("database not reachable yet (%s), retrying", exc.__class__.__name__)
+            time.sleep(2)
+
+
 def migrate() -> int:
-    with connect() as conn:
+    with connect_with_retry(int(os.environ.get("DB_WAIT_SECONDS", "120"))) as conn:
         conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_ID,))
         try:
             conn.execute(

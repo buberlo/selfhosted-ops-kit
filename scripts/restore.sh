@@ -47,6 +47,14 @@ spec:
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
+      affinity: # backup PVC is RWO and mounted by the postgres pod
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: ${RELEASE}
+                  app.kubernetes.io/component: postgres
       securityContext:
         runAsNonRoot: true
         runAsUser: 70
