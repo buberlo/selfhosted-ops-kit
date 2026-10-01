@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Explicit bash => `-eo pipefail`. Without it, `make test | tee e2e.log` would
+# report success even when the tests fail.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -135,10 +141,10 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           mkdir -p demo
-          asciinema rec --headless --overwrite --return -q --window-size 120x34 -i 1 \
+          asciinema rec --headless --overwrite --return -q --window-size 120x34 -i 2.5 \
             --title "selfhosted-ops-kit day-2 demo" \
             -c "bash -c 'scripts/demo.sh 2>&1 | tee demo/demo.log; exit \${PIPESTATUS[0]}'" demo/demo.cast < /dev/null
-          agg --idle-time-limit 1 --speed 1.5 --font-size 14 demo/demo.cast demo/demo.gif
+          agg --idle-time-limit 2.5 --speed 1 --font-size 14 --last-frame-duration 5 demo/demo.cast demo/demo.gif
           cat demo/demo.log
           ls -la demo
 
