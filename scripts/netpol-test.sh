@@ -20,6 +20,7 @@ metadata:
     ${label}
 spec:
   restartPolicy: Never
+  terminationGracePeriodSeconds: 1
   automountServiceAccountToken: false
   securityContext: { runAsNonRoot: true, runAsUser: 70, seccompProfile: { type: RuntimeDefault } }
   containers:

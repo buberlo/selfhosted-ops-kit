@@ -18,6 +18,7 @@ metadata:
   labels: { app.kubernetes.io/instance: "${RELEASE}", app.kubernetes.io/component: traffic }
 spec:
   restartPolicy: Never
+  terminationGracePeriodSeconds: 1
   automountServiceAccountToken: false
   securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
   containers:
